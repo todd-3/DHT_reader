@@ -1,5 +1,6 @@
 """
 An interface Library for the adafruit DHT11
+* SCRIPT MUST BE RUN AS SUDO TO ALLOW FOR SETTING SCHEDULER PRIORITY *
 
 This code is a pure python version of the Adafruit_DHT library which is now
 deprecated and does not support raspberry pi 4s
@@ -9,9 +10,16 @@ Author: Roman Todd
 """
 import RPi.GPIO as gpio
 from time import sleep
+from os import nice as cpu_priority
 
 DHT_pulses = 41  # the DHT sensor sends 1 time pulse and 40 data pulses
 DHT_read_timeout = 300
+
+try:  # check if script has sufficient privileges to set priority
+    cpu_priority(-1)
+    cpu_priority(1)
+except PermissionError:
+    raise PermissionError("Script must be run with sudo privileges to allow for setting scheduling priorities")
 
 
 class ReadParseError(Exception):
@@ -20,6 +28,10 @@ class ReadParseError(Exception):
 def read_data(pin_num: int) -> tuple[float, float]:
     gpio.setmode(gpio.BCM)  # set control mode
 
+    # preparing a list to contain data pulse information
+    # creates an array of 0s with length equal to DHT_pulses * 2
+    pulse_counter = [0 for i in range(DHT_pulses * 2)]
+
     # initialize sensor for read
     gpio.setup(pin_num, gpio.OUT)  # set pin to be an output
     gpio.output(pin_num, 1)  # set pin high
@@ -27,9 +39,9 @@ def read_data(pin_num: int) -> tuple[float, float]:
     gpio.output(pin_num, 0)  # set pin low
     sleep(0.02)  # keep pin low for 20 milliseconds
 
-    # preparing a list to contain data pulse information
-    # creates an array of 0s with length equal to DHT_pulses * 2
-    pulse_counter = [0 for i in range(DHT_pulses * 2)]
+    # the read operations are very time sensitive
+    # as such the script is set to maximum priority to ensure proper readings
+    cpu_priority(-20)
 
     # wait for sensor to begin data transmission
     gpio.setup(pin_num, gpio.IN)  # set pin to be input
@@ -44,6 +56,8 @@ def read_data(pin_num: int) -> tuple[float, float]:
 
         while gpio.input(pin_num):  # pin is high
             pulse_counter[e] += 1
+
+    cpu_priority(20)  # reading complete, reset to default priority
 
     # calculate 50 microsecond threshold value for decoding
     threshold = 0
