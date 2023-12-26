@@ -25,6 +25,9 @@ except PermissionError:
 class ReadParseError(Exception):
     ...
 
+class ReadTimeoutError(Exception):
+    ...
+
 def read_data(pin_num: int) -> tuple[float, float]:
     gpio.setmode(gpio.BCM)  # set control mode
 
@@ -45,17 +48,24 @@ def read_data(pin_num: int) -> tuple[float, float]:
 
     # wait for sensor to begin data transmission
     gpio.setup(pin_num, gpio.IN)  # set pin to be input
+    c = 0  # timeout counter
     while gpio.input(pin_num):  # wait for pin to be pulled low by sensor
-        pass
+        if c == DHT_read_timeout:
+            raise ReadTimeoutError("Timed out waiting for sensor to being transmission")
+        c += 1
 
     # record data pulses
     for i in range(0, DHT_pulses * 2, 2):  # loop for expected number of low, high pulse pairs (DHT_pulses * 2)
         e = i + 1
         while not gpio.input(pin_num):  # pin is low
             pulse_counter[i] += 1
+            if pulse_counter[i] == DHT_read_timeout:
+                raise ReadTimeoutError("Timed out reading data pulse")
 
         while gpio.input(pin_num):  # pin is high
             pulse_counter[e] += 1
+            if pulse_counter[e] == DHT_read_timeout:
+                raise ReadTimeoutError("Timed out reading data pulse")
 
     cpu_priority(20)  # reading complete, reset to default priority
 
@@ -95,5 +105,7 @@ if __name__ == "__main__":
             hum, temp = read_data(pin)
             print(f"Humidity: {hum}%\nTemperature: {temp} degrees")
         except ReadParseError:
-            print("Failed to read sensor")
+            print("Data could not be parsed properly")
+        except ReadTimeoutError as e:
+            print(e)
         sleep(10)
