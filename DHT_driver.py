@@ -13,16 +13,17 @@ from time import sleep
 DHT_pulses = 41  # the DHT sensor sends 1 time pulse and 40 data pulses
 DHT_read_timeout = 300
 
-try:  # check if script has sufficient privileges to set priority
+try:  # try to import os.nice and check if script as permissions to set scheduler priority
     from os import nice as cpu_priority
     cpu_priority(-1)
     cpu_priority(1)
 except (PermissionError, ImportError) as e:
-    if isinstance(e, PermissionError):  # give message for permission error
-        print("WARNING -- Script must be run with sudo privileges to allow for setting scheduling priorities - switching to no prioritization")
+    if isinstance(e, PermissionError):  # give message for lack of permissions
+        print("WARNING -- Could not set scheduler priority - try running script using 'sudo'")
     elif isinstance(e, ImportError):  # give message for import error
         print("WARNING -- method 'nice' could not be found in os library - likely because this is a windows system")
 
+    print("Running script without setting priority")
     def cpu_priority(priority_increment: int):  # spoof priority method to allow continued execution
         return None
 
