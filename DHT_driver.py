@@ -9,7 +9,9 @@ Author: Roman Todd
 """
 import RPi.GPIO as gpio
 from time import sleep
+import logging
 
+logger = logging.getLogger(__name__)  # initiate logger
 DHT_pulses = 41  # the DHT sensor sends 1 time pulse and 40 data pulses
 DHT_read_timeout = 300
 
@@ -19,11 +21,11 @@ try:  # try to import os.nice and check if script as permissions to set schedule
     cpu_priority(1)
 except (PermissionError, ImportError) as e:
     if isinstance(e, PermissionError):  # give message for lack of permissions
-        print("WARNING -- Could not set scheduler priority - try running script using 'sudo'")
+        logger.warning("Could not set scheduler priority - try running script using 'sudo'")
     elif isinstance(e, ImportError):  # give message for import error
-        print("WARNING -- method 'nice' could not be found in os library - likely because this is a windows system")
+        logger.warning("Method 'nice' could not be found in os library - likely because this is a windows system")
 
-    print("Running script without setting priority")
+    logger.info("Running script without setting priority")
     def cpu_priority(priority_increment: int):  # spoof priority method to allow continued execution
         return None
 
@@ -35,6 +37,7 @@ class ReadTimeoutError(Exception):
     ...
 
 def read_data(pin_num: int) -> tuple[float, float]:
+    logger.debug(f"Reading from pin {pin_num}")
     gpio.setmode(gpio.BCM)  # set control mode
 
     # preparing a list to contain data pulse information
@@ -50,6 +53,7 @@ def read_data(pin_num: int) -> tuple[float, float]:
 
     # the read operations are very time sensitive
     # as such the script is set to maximum priority to ensure proper readings
+    logger.debug("Increasing scheduler priority")
     cpu_priority(-20)
 
     # wait for sensor to begin data transmission
@@ -73,6 +77,7 @@ def read_data(pin_num: int) -> tuple[float, float]:
             if pulse_counter[e] == DHT_read_timeout:
                 raise ReadTimeoutError("Timed out reading data pulse")
 
+    logger.debug("Data read complete - resetting priority to default")
     cpu_priority(20)  # reading complete, reset to default priority
 
     # calculate 50 microsecond threshold value for decoding
@@ -80,7 +85,8 @@ def read_data(pin_num: int) -> tuple[float, float]:
     for i in range(2, DHT_pulses * 2, 2):  # ignore first pulse pair
         threshold += pulse_counter[i]  # sum all low pulses
 
-    threshold /= DHT_pulses  # divide sum by pulse count to get average low pulse length (should be ~50Us)
+    threshold //= DHT_pulses  # divide sum by pulse count to get average low pulse length (should be ~50Us)
+    logger.debug(f"Using threshold value of {threshold}")
 
     # decode pulse stream by comparing against 50 microsecond threshold
     # a pulse less than 50us (~28ms) is a 0
@@ -93,9 +99,9 @@ def read_data(pin_num: int) -> tuple[float, float]:
             data[index] |= 1  # OR an additional bit
         # no bits added for 0
 
-    # use byte 5 as checksum to verify rest of data
+    logger.debug(f"Data bytes are {', '.join([str(b) for b in data])}")
+    # use byte 5 as checksum to verify data
     if data[4] == ((data[0] + data[1] + data[2] + data[3]) & 0xFF):
-        print(data[:4])
         humidity = float(data[0])
         temperature = float(data[2])
     else:
@@ -104,6 +110,7 @@ def read_data(pin_num: int) -> tuple[float, float]:
     return humidity, temperature
 
 if __name__ == "__main__":
+    logging.basicConfig(format='%(levelname)s -- %(message)s', level=logging.DEBUG)
     pin = int(input("What pin should be read from?  "))
 
     while True:
@@ -111,7 +118,7 @@ if __name__ == "__main__":
             hum, temp = read_data(pin)
             print(f"Humidity: {hum}%\nTemperature: {temp} degrees")
         except ReadParseError:
-            print("Data could not be parsed properly")
+            logger.warning("Data could not be parsed properly")
         except ReadTimeoutError as e:
-            print(e)
+            logger.warning(e)
         sleep(10)
