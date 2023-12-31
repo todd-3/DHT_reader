@@ -2,7 +2,7 @@
 An interface Library for the adafruit DHT11
 * SCRIPT MUST BE RUN AS SUDO TO ALLOW FOR SETTING SCHEDULER PRIORITY *
 
-This code uses read methods from the Adafruit_DHT library which is now deprecated and does not support raspberry pi 4s
+This code uses read methods shown in the Adafruit_DHT library which is now deprecated
 Source: https://github.com/adafruit/Adafruit_Python_DHT/blob/master/source/Raspberry_Pi_2/pi_2_dht_read.c
 
 Author: Roman Todd
